@@ -11,38 +11,40 @@
 
 ## Requisitos previos
 
-El objetivo del proyecto es crear una aplicación a la que se le pida componer una letra original de una canción en base a dos parámetros de entrada:
+El objetivo del proyecto es crear una aplicación a la que se le pida componer una letra original de una canción en base a unas palabras clave proporcionadas por el usuario, que deberán aparecer en el texto generado.
 
-1. Artista similar
-2. Palabras que deban aparecer en el texto generado
+Inicialmente como entorno de trabajo se empezó a trabajar localmente en una máquina que tiene instalados **Visual Studio Code** con el plugin **Jupyter** para leer y ejecutar notebooks, así como **Python** con las siguientes librerías:
 
-Como entorno de trabajo se ha trabajado localmente en una máquina que tenía instalados Visual Studio Code y Python.
-
-Se ha añadido un plugin para VSCode para leer y ejecutar notebooks, así como se han instalado las siguientes librerías necesarias:
-
-- **TensorFlow y Keras**: Para la creación del modelo de deep learning.
+- **TensorFlow y Keras**: Para la creación del modelo de aprendizaje profundo.
 - **Pandas**: Para manipular y explorar el dataset.
 - **NumPy**: Para cálculos numéricos.
 - **scikit-learn**: Para procesamiento y vectorización.
 - **nltk**: Para trabajar con texto y preprocesar las letras.
 - **Matplotlib**: Para visualizar datos durante la fase de análisis.
 
-Se ha utilizado un dataset en CSV de información sobre canciones, concretamente con los campos siguientes:
+Sin embargo y debido a insuficiencia de recursos hardware y problemas con la puesta a punto de la máquina, finalmente se ha entrenado el modelo en Kaggle en el siguiente notebook:
 
-- **Name**: El título de la canción.
-- **Lyrics**: La letra de la canción.
-- **Singer**: El nombre del cantante o artista.
-- **Movie**: La película o álbum asociado a la canción (si procede).
-- **Genre**: El género o géneros a la que pertenece la canción.
-- **Rating**: La puntuación o popularidad de la canción en Spotify.
+[https://www.kaggle.com/code/davidcarvajalgarrido/generador-de-letras-de-canciones](https://www.kaggle.com/code/davidcarvajalgarrido/generador-de-letras-de-canciones)
 
-El dataset utilizado ha sido el siguiente:
+Se ha utilizado también el siguiente dataset en CSV de información sobre canciones de todos los géneros de 1950 a 2019:
 
-[https://www.kaggle.com/datasets/suraj520/music-dataset-song-information-and-lyrics](https://www.kaggle.com/datasets/suraj520/music-dataset-song-information-and-lyrics)
+[https://www.kaggle.com/datasets/saurabhshahane/music-dataset-1950-to-2019](https://www.kaggle.com/datasets/saurabhshahane/music-dataset-1950-to-2019)
+
+Sin embargo, para este proyecto se ha tomado un subconjunto de esos datos, tomando solamente las canciones del género rock y los siguientes campos:
+
+- **artist_name**: El nombre del cantante.
+- **track_name**: El título de la canción.
+- **release_date**: El año de publicación.
+- **genre**: El género de la canción.
+- **lyrics**: La letra de la canción.
+- **len**: Los segundos de duración.
+- **topic**: El tema general de la letra.
 
 ## Metodología de trabajo
 
-### Preparación del entorno
+### Preparación del entorno (en local)
+
+**Aclaración previa**: Como se ha indicado anteriormente, aunque la puesta a punto de la máquina de trabajo se haya llevado a cabo siguiendo los siguientes pasos, finalmente el entrenamiento del modelo se ha hecho desde un notebook de Kaggle.
 
 1. **Instalar dependencias necesarias**:
 
@@ -57,11 +59,11 @@ El dataset utilizado ha sido el siguiente:
 3. **Ficheros del proyecto**:
 
     ```
-    songs_dataset.csv         # Datos
-    songs_composer.ipynb      # Análisis exploratorios y pruebas
-    song_generator.h5         # Modelo entrenado
-    tokenizer_config.json     # Tokenizer del modelo
-    generate_song.py          # Código de la aplicación
+    data/tcc_ceds_music_rock.csv   # Datos
+    models/song_generator.h5       # Modelo entrenado
+    models/tokenizer_config.json   # Tokenizer del modelo
+    songs_composer.ipynb           # Generación del modelo
+    generate_song.py               # Aplicación de usuario
     ```
 
 ### Exploración y preprocesamiento del dataset
@@ -72,12 +74,12 @@ El dataset utilizado ha sido el siguiente:
     import pandas as pd
 
     # Cargar dataset
-    df = pd.read_csv("songs_dataset.csv")
+    df = pd.read_csv("data/tcc_ceds_music_rock.csv")
 
     # Exploración
     print(df.head())
     print(df.info())
-    print(df['Lyrics'].iloc[0])  # Ejemplo de letra
+    print(df['lyrics'].iloc[0])
     ```
 
 2. **Limpieza de datos**: Como puede haber filas con datos incompletos, se ha decidido descartarlas.
@@ -87,9 +89,11 @@ El dataset utilizado ha sido el siguiente:
     Esta limpieza se ha hecho con métodos de `dataframe` así como los métodos de clases primitivas de Python como los del tipo `string`.
 
     ```python
+    # Filas con datos incompletos
     df = df.dropna()
-    
-    df['Lyrics'] = df['Lyrics'].str.replace(r'\n', ' ')
+
+    # Eliminación de caracteres no deseados
+    df['Lyrics'] = df['lyrics'].str.replace(r'\n', ' ')
     ```
 
 3. **Tokenización y preprocesamiento de texto**: Una vez limpiado el texto, se ha realizado la tokenización del mismo así como el procesamiento de las letras, que dado el dataset de partida se trata de temas en inglés.
@@ -101,18 +105,19 @@ El dataset utilizado ha sido el siguiente:
     from nltk.tokenize import word_tokenize
     from nltk.corpus import stopwords
 
+    nltk.download('punkt_tab')
     nltk.download('punkt')
     nltk.download('stopwords')
 
     # Tokenización y limpieza
     stop_words = set(stopwords.words('english'))
-    
+
     def preprocess_lyrics(lyrics):
         tokens = word_tokenize(lyrics.lower())
         tokens = [t for t in tokens if t.isalpha() and t not in stop_words]
         return ' '.join(tokens)
 
-    df['Processed_Lyrics'] = df['Lyrics'].apply(preprocess_lyrics)
+    df['Processed_Lyrics'] = df['lyrics'].apply(preprocess_lyrics)
     ```
 
 4. **Análisis exploratorio**: A partir de la tokenización se ha analizado la distribución de artistas, géneros y palabras más comunes, utilizando la función `Counter` del módulo de Python de `collections`.
@@ -140,6 +145,26 @@ El dataset utilizado ha sido el siguiente:
     Para ello, se ha hecho uso de la librería `keras` dentro de `tensorflow`, concretamente de `Tokenizer` y `pad_sequences`, obteniendo así las secuencias con las que se realizará posteriormente el entrenamiento.
 
     ```python
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import Embedding, LSTM, Dense
+
+    model = Sequential([
+        Embedding(input_dim=5000, output_dim=128),
+        LSTM(128, return_sequences=True),
+        LSTM(128),
+        Dense(128, activation='relu'),
+        Dense(len(tokenizer.word_index) + 1, activation='softmax')
+    ])
+
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.summary()
+    ```
+
+2. **Crear el modelo de generación**: Con todos los elementos necesarios se ha procedido a crear el modelo, utilizando una arquitectura de tipo LSTM (red neuronal recurrente de memoria a corto-largo plazo), que está especialmente indicada para el tipo de tareas que se pretenden realizar en este proyecto.
+
+    De nuevo `keras` ofrece las herramientas para implementarla.
+
+    ```python
     from tensorflow.keras.preprocessing.text import Tokenizer
     from tensorflow.keras.preprocessing.sequence import pad_sequences
 
@@ -153,26 +178,6 @@ El dataset utilizado ha sido el siguiente:
     padded_sequences = pad_sequences(sequences, maxlen=max_length, padding='post')
     ```
 
-2. **Crear el modelo de generación**: Con todos los elementos necesarios se ha procedido a crear el modelo, utilizando una arquitectura de tipo LSTM (red neuronal recurrente de memoria a corto-largo plazo), que está especialmente indicada para el tipo de tareas que se pretenden realizar en este proyecto.
-
-    De nuevo `keras` ofrece las herramientas para implementarla.
-
-    ```python
-    from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import Embedding, LSTM, Dense
-
-    model = Sequential([
-        Embedding(input_dim=5000, output_dim=128, input_length=max_length),
-        LSTM(128, return_sequences=True),
-        LSTM(128),
-        Dense(128, activation='relu'),
-        Dense(len(tokenizer.word_index) + 1, activation='softmax')
-    ])
-
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-    model.summary()
-    ```
-
 3. **Entrenamiento**: El último paso es la división de los datos en entrenamiento y validación, para lo que se utilizar la librería `scikit-learn`.
 
     Se ha hecho también una conversión intermedia de etiquetas con `keras` para facilitar el proceso de entrenamiento.
@@ -182,23 +187,26 @@ El dataset utilizado ha sido el siguiente:
     ```python
     from sklearn.model_selection import train_test_split
     from tensorflow.keras.utils import to_categorical
+    import json
 
-    X_train, X_val, y_train, y_val = train_test_split(padded_sequences, df['Genre'], test_size=0.2)
+    # Crear etiquetas y convertir etiquetas a formato categórico
+    X = padded_sequences[:, :-1]
+    y = padded_sequences[:, -1]
+    y = to_categorical(y, num_classes=len(tokenizer.word_index) + 1)
 
-    # Convertir etiquetas a formato categórico (si es necesario)
-    y_train = to_categorical(y_train)
-    y_val = to_categorical(y_val)
+    # Dividir los datos en entrenamiento y validación
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
 
     model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=10, batch_size=32)
 
     # Guardar el modelo entrenado y el tokenizer
-    model.save("song_generator.h5")
+    model.save("models/song_generator.h5")
 
     tokenizer_config = {
         "word_index": tokenizer.word_index,
         "max_length": max_length
     }
-    with open("tokenizer_config.json", "w") as f:
+    with open("models/tokenizer_config.json", "w") as f:
         json.dump(tokenizer_config, f)
     ```
 
@@ -214,9 +222,9 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.preprocessing.text import Tokenizer
 
 # Cargar el modelo y el tokenizer
-model = load_model("song_generator.h5")
+model = load_model("models/song_generator.h5")
 tokenizer = Tokenizer()
-tokenizer_config_path = "tokenizer_config.json"
+tokenizer_config_path = "models/tokenizer_config.json"
 
 # Cargar configuración del tokenizer
 import json
@@ -241,8 +249,8 @@ def generate_lyrics(model, tokenizer, seed_text, num_words=50):
 # Interacción con el usuario
 def main():
     print("¡Bienvenido al generador de letras de canciones!")
-    print("Por favor, introduce un artista similar:")
-    artist = input("> ").strip()
+    # print("Por favor, introduce un artista similar:")
+    # artist = input("> ").strip()
     
     print("Ahora introduce algunas palabras clave separadas por espacios:")
     seed_text = input("> ").strip()
@@ -264,8 +272,12 @@ python generate_song.py
 
 ## Resultados obtenidos
 
-Tras realizar todo el proyecto, se ha lanzado el script `generate_song.py` probando con el artista `Queen` y las palabras `magic time`, con este resultado:
+Tras realizar todo el proyecto, se ha lanzado el script `generate_song.py` probando con las palabras `magic time`, con este resultado:
 
-    [WIP]
+```bash
+magic time
+```
 
-Se han hecho otras pruebas similares con otros artistas y palabras clave, generando más letras, que con la música adecuada podrían llegar a convertirse en grandes éxitos.
+Se han hecho otras pruebas similares con otras palabras clave con los mismos resultados. Esto claramente significa que aún queda trabajo por hacer, ya que el modelo no es capaz de crear sus propias letras adecuadamente. 
+
+Por tanto, es obvio que hay que seguir trabajando en el proyecto, bien en los datos, bien en el proceso, hasta que sea capaz de generar letras que con la música adecuada puedan llegar a convertirse en grandes éxitos.

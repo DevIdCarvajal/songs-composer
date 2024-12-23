@@ -32,10 +32,7 @@ def generate_lyrics(model, tokenizer, seed_text, num_words=50):
 # Interacción con el usuario
 def main():
     print("¡Bienvenido al generador de letras de canciones!")
-    print("Por favor, introduce un artista similar:")
-    artist = input("> ").strip()
-    
-    print("Ahora introduce algunas palabras clave separadas por espacios:")
+    print("Por favor, introduce algunas palabras clave separadas por espacios:")
     seed_text = input("> ").strip()
 
     print("\nGenerando letra de la canción...\n")
